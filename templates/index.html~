@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+        <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script> 
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.js"></script>
+        <script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/3.0.4/fuse.min.js"></script>
+        <script src="../static/js/fuzzycomplete.js" type="text/javascript"></script>
+        <title>Series de Tiempo República Argentina</title>
+
+        <style type="text/css">
+        #auto_complete {
+            width: 70%;
+        }
+        .chart {
+            margin-top: 30px;
+            text-align: center;
+            width: 70%;
+            border: solid 1px #ddd; 
+            float: left;
+        }
+        #meta_container {
+            margin-top: 30px;
+            border: solid 1px #ddd;
+            width: 27%;
+            float: right;
+            font-size: 11px;
+            font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+            padding: 1em;
+        }
+        .searcharea {
+            box-sizing: border-box;
+            width: 750px;
+            margin: 0 auto;
+            font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 1em;
+        }
+        .ui-helper-hidden-accessible div {
+            display: none;
+        }
+        .search_id {
+        }
+        </style>
+    </head>
+    <body>
+        {% block body %}
+        <div id="content">
+            <div class="searcharea">
+                <form method="POST">
+                    {{ form.csrf_token }}
+                    {{ form.autocomp }} 
+                    <input type="submit" value="Obtener Serie" />
+                    <div id="results"></div>
+                </form>
+            </div>
+            <div id="chart" class="chart"></div>
+            <div id="metadata">
+            </div>    
+        </div>
+        {% endblock %}
+    </body>
+    <script type="text/javascript" charset="utf-8">
+
+        var api_data = {{ api_data|safe }} 
+
+        
+        //xVal = []
+        //yVal = [];
+
+        var data = [];
+        $.each(api_data, function(index, item) {
+            xval = []
+            yval = []
+            $.each(item.data, function(i, v) {
+                xval.push(v[0]);
+                yval.push(v[1])
+            });
+            data.push({
+                type: 'scatter',
+                x: xval, 
+                y: yval, 
+                name: item.meta[1].dataset[0].description
+            })
+            $ ('#metadata').append('<div id="meta_container"><p>Titulo: ' + item.meta[1].dataset[0].title + '</p><p>Descripción: ' + item.meta[1].dataset[0].description + '</p><p>Emisión: ' + item.meta[1].dataset[0].issued + '</p><p>Fuente: ' + item.meta[1].dataset[0].source + '</p><p>Categoría: ' + item.meta[1].title + '</p><p><a href=' + item.meta[1].dataset[0].distribution[0].downloadURL + '>CSV</a></div>')
+        });
+
+        layout = {
+            title: api_data[0].meta[1].dataset[0].title,
+            showlegend: true,
+            legend: {"orientation": "h"}
+            };
+
+        chart_data = [data]
+        Plotly.newPlot('chart', data, layout);
+
+        //api_data.data.forEach(function(item,index){
+        //    xVal.push(item[0]);
+        //    yVal.push(item[1]);
+        //});
+
+        //var trace1 = {
+        //  x: xVal,
+        //  y: yVal,
+        //  type: 'scatter'
+        //};
+        
+        //chart_data = [data]
+
+        //var layout = {
+        //  title: data.meta[1].dataset[0].description
+        //};
+
+        //Plotly.newPlot('chart', data, layout);
+
+        var series_list = {{ series_list|safe }}
+
+        $(function() {
+            function split(val) {
+                return val.split(/,\s*/);
+            }
+            function extractLast(term) {
+                return split(term).pop();
+            }
+            $("#auto_complete")
+            .on("keydown", function(event) {
+                if ( event.keyCode === $.ui.keyCode.TAB &&
+                    $( this ).autocomplete( "instance").menu.active ) {
+                        event.preventDefault();
+                    }
+                })
+            .autocomplete({
+                minLength: 3,
+                source: function(request, response) {
+                        // delegate back to autocomplete, but extract the last term
+                        response($.ui.autocomplete.filter(
+                            series_list, extractLast(request.term)));
+                },
+                focus: function(event, ui) {
+                      return false;
+                },
+                select: function(event, ui) {
+                    var terms = split(this.value);
+                    // remove the current input
+                    terms.pop();
+                    // add the selected item
+                    terms.push(ui.item.value);
+                    // add placeholder to get the comma-and-space at the end
+                    terms.push("");
+                    this.value = terms.join(", ") 
+                    return false;
+                  },
+                appendTo: "#results",
+                open: function() {
+                    $('#results > ul').css({"list-style" : "none"});
+                },
+                messages: {
+                    noResults: '',
+                    results: function() {}
+                }
+            })
+        });
+        $('#auto_complete').on('change',function () {
+            $(this).parent().append($('<span class=serie_id />').html($(this).val()));
+            $(this).remove();
+        });
+
+
+        //$(function() {
+        //    $("#auto_complete").autocomplete({
+        //          minLength: 3,
+        //          source: series_list,
+        //          focus: function(event, ui) {
+        //              $("#project").val(ui.item.label);
+        //              return false;
+        //              },
+        //          select: function( event, ui ) {
+        //              $("#auto_complete").val(ui.item.value);
+        //              return false;
+        //          },
+        //          appendTo: "#results",
+        //        open: function() {
+        //            $('#results > ul').css({"list-style" : "none"});
+        //        }
+        //    })
+        //});
+
+        //$('#titulo').html(data.meta[1].dataset[0].title);
+        //$('#emision').html(data.meta[1].dataset[0].issued);
+        //$('#fuente').html(data.meta[1].dataset[0].source);
+        //$('#categoria').html(data.meta[1].title);
+        //$('#csv_link').attr("href", data.meta[1].dataset[0].distribution[0].downloadURL);
+
+        
+
+    </script>

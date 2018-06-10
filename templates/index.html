@@ -1,0 +1,147 @@
+        <!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <link rel="stylesheet" href="../static/css/stra.css" type="text/css" />
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+        <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script> 
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.js"></script>
+        <script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/3.0.4/fuse.min.js"></script>
+        <script src="../static/js/fuzzycomplete.js" type="text/javascript"></script>
+        <title>Series de Tiempo República Argentina</title>
+
+    </head>
+    <body>
+        {% block body %}
+        <div class="col-md-12">
+            <div class="searcharea">
+                <form method="POST">
+                    {{ form.csrf_token }}
+                    {{ form.autocomp(class_="search-field", placeholder="Buscar serie...") }} 
+                    <input type="submit" id="search-button" class="search-field" value="Obtener Series" />
+                    <p><label>Desde: </label>{{ form.start_date(class_="search-field", placeholder="Ej. 2000") }} 
+                    <label>Hasta: </label>{{ form.end_date(class_="search-field", placeholder="Ej.  2018") }}
+                    <label>Valores: </label>{{ form.representation_mode(class_="search-field") }} 
+                    <label>Frecuencia: </label>{{ form.collapse(class_="search-field") }} 
+                    <label>Agregación: </label>{{ form.collapse_aggregation(class_="search-field") }} 
+                    <label>Límite: </label>{{ form.limit(class_="search-field") }}</p>
+                    <div id="results"></div>
+                    {% if form.errors %}
+                        {% for error in form.errors %}
+                            {% if error == "limit" %}
+                                <p class="error">Límite no puede ser superior a 1000.</p>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </form>
+            </div>
+
+            <div id="contentarea">
+                <p id="search-message">Busca una series para generar el gráfico. Pueden grafircarse multiples series a la vez.</p>
+                <div id="chart" class="chart col-md-5"> </div>
+                <div id="metadata"> </div>    
+            </div>    
+        </div>
+        <div class="footer">
+            <p>Esta aplicación utiliza la <a href="https://www.minhacienda.gob.ar/datos/">API del Ministerio de Hacienda</a> para graficar las series de tiempo disponibles. Para mas detalles de la API ver la <a href="http://series-tiempo-ar-api.readthedocs.io/es/latest/">documentación</a>.</p>
+            <p>App construida con: <a
+                href="http://flask.pocoo.org/">Python/Flask</a>,
+            <a href="https://jquery.com/">JQuery</a>,
+            <a href="http://fusejs.io/">Fuse.js</a>,
+            <a href="https://aliask.github.io/fuzzycomplete/">Fuzzycomplete</a>,
+            <a href="https://plot.ly/">D3/Plotly</a></p>
+            <p>Contacto: federico.carles |@| protonmail | .com</p>
+        </div>
+        {% endblock %}
+    </body>
+
+    <script type="text/javascript" charset="utf-8">
+
+    var series_list = {{ series_list|safe }}
+    var api_data = {{ api_data|safe }} 
+    var data = [];
+
+    $(document).ready(function(){
+
+        $.each(api_data, function(index, item) {
+
+            var xval = [];
+            var yval = [];
+            var series_id = item.params.ids
+            var series_name = ""
+
+            $.each(item.data, function(i, v) {
+                xval.push(v[0]);
+                yval.push(v[1])
+            });
+            
+           $.each(series_list, function(i, v) {
+               if (v.value == series_id) {
+                   series_name = v.label;
+               }
+               return series_name;
+           });
+           data.push({
+                type: 'scatter',
+                x: xval, 
+                y: yval, 
+                name: series_name //item.meta[1].dataset[0].description
+            })
+            $('#metadata').append('<div id="meta_container"><p>Titulo: ' + item.meta[1].dataset[0].title + '</p><p>Descripción: ' + item.meta[1].dataset[0].description + '</p><p>Emisión: ' + item.meta[1].dataset[0].issued + '</p><p>Fuente: ' + item.meta[1].dataset[0].source + '</p><p>Categoría: ' + item.meta[1].title + '</p><p><a href=' + item.meta[1].dataset[0].distribution[0].downloadURL + '>CSV</a></div>')
+
+            layout = {
+                title: api_data[0].meta[1].dataset[0].title,
+                showlegend: true,
+                legend: {"orientation": "h"}
+                };
+
+            chart_data = [data]
+            Plotly.newPlot('chart', data, layout);
+        });
+
+        $(function() {
+            function split(val) {
+                return val.split(/,\s*/);
+            }
+            function extractLast(term) {
+                return split(term).pop();
+            }
+
+            $("#auto_complete")
+            .on("keydown", function(event) {
+                if ( event.keyCode === $.ui.keyCode.TAB &&
+                    $( this ).autocomplete( "instance").menu.active ) {
+                        event.preventDefault();
+                    }
+                })
+            .autocomplete({
+                minLength: 3,
+                source: function(request, response) {
+                        response($.ui.autocomplete.filter(
+                            series_list, extractLast(request.term)));
+                },
+                focus: function(event, ui) {
+                      return false;
+                },
+                select: function(event, ui) {
+                    var terms = split(this.value);
+                    terms.pop();
+                    terms.push(ui.item.value);
+                    terms.push("");
+                    this.value = terms.join(", ") 
+                    return false;
+                  },
+                appendTo: "#results",
+                open: function() {
+                    $('#results > ul').css({"list-style" : "none"});
+                },
+                messages: {
+                    noResults: '',
+                    results: function() {}
+                }
+            })
+        });
+    });
+
+    </script>

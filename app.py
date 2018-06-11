@@ -3,6 +3,7 @@
 """ Aplicación de Flask para graficar las series de tiempo de la
 api del Ministerio de Hacienda de la República Argentina"""
 
+import os
 import time
 import json
 import urllib.request
@@ -13,7 +14,8 @@ from wtforms import TextField, SelectField, IntegerField, validators
 
 
 APP = Flask(__name__)
-APP.config['SECRET_KEY'] = 'you-will-never-guess'
+
+APP.config['SECRET_KEY'] = os.environ.get("STRA_SECRET_KEY", "")
 
 SERIES = 'http://infra.datos.gob.ar/catalog/modernizacion/dataset/1/distribution/1.2/download/series-tiempo-metadatos.csv'
 BASE_URL = "http://apis.datos.gob.ar/series/api/series?ids="
